@@ -376,7 +376,6 @@ func getStagedChanges(wt *git.Worktree) ([]string, error){
 	
 	//list staged files in format "Status \t Filename" e.g "A	new-file"
 	stagedFilesAndStatus := strings.Split(string(output), "\n")
-	fmt.Printf("files %v\n", stagedFilesAndStatus)
 
 	for _, fileString := range stagedFilesAndStatus {
 		if len(fileString) != 0 {
