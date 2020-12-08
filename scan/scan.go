@@ -273,62 +273,54 @@ func (repo *Repo) scanUncommitted() error {
 		return err
 	}
 
-	status, err := gitStatus(wt)
-	for fn, state := range status {
+	status, err := getStagedChanges(wt)
+	for _,fn := range status {
 		var (
 			prevFileContents string
 			currFileContents string
 			filename         string
 		)
-
-		if state.Staging != git.Untracked {
-			if state.Staging == git.Deleted {
-				// file in staging has been deleted, aka it is not on the filesystem
-				// so the contents of the file are ""
-				currFileContents = ""
-			} else {
-				workTreeBuf := bytes.NewBuffer(nil)
-				workTreeFile, err := wt.Filesystem.Open(fn)
-				if err != nil {
-					continue
-				}
-				if _, err := io.Copy(workTreeBuf, workTreeFile); err != nil {
-					return err
-				}
-				currFileContents = workTreeBuf.String()
-				filename = workTreeFile.Name()
-			}
-
-			// get files at HEAD state
-			prevFile, err := prevTree.File(fn)
-			if err != nil {
-				prevFileContents = ""
-
-			} else {
-				prevFileContents, err = prevFile.Contents()
-				if err != nil {
-					return err
-				}
-				if filename == "" {
-					filename = prevFile.Name
-				}
-			}
-
-			dmp := diffmatchpatch.New()
-			diffs := dmp.DiffCleanupSemantic(dmp.DiffMain(prevFileContents, currFileContents, false))
-			var diffContents string
-			for _, d := range diffs {
-				if d.Type == diffmatchpatch.DiffInsert {
-					diffContents += fmt.Sprintf("%s\n", d.Text)
-				}
-			}
-			repo.CheckRules(&Bundle{
-				Content:  diffContents,
-				FilePath: filename,
-				Commit:   c,
-				scanType: uncommittedScan,
-			})
+		
+		workTreeBuf := bytes.NewBuffer(nil)
+		workTreeFile, err := wt.Filesystem.Open(fn)
+		if err != nil {
+			continue
 		}
+		if _, err := io.Copy(workTreeBuf, workTreeFile); err != nil {
+			return err
+		}
+		currFileContents = workTreeBuf.String()
+		filename = workTreeFile.Name()
+
+		// get files at HEAD state
+		prevFile, err := prevTree.File(fn)
+		if err != nil {
+			prevFileContents = ""
+
+		} else {
+			prevFileContents, err = prevFile.Contents()
+			if err != nil {
+				return err
+			}
+			if filename == "" {
+				filename = prevFile.Name
+			}
+		}
+
+		dmp := diffmatchpatch.New()
+		diffs := dmp.DiffCleanupSemantic(dmp.DiffMain(prevFileContents, currFileContents, false))
+		var diffContents string
+		for _, d := range diffs {
+			if d.Type == diffmatchpatch.DiffInsert {
+				diffContents += fmt.Sprintf("%s\n", d.Text)
+			}
+		}
+		repo.CheckRules(&Bundle{
+			Content:  diffContents,
+			FilePath: filename,
+			Commit:   c,
+			scanType: uncommittedScan,
+		})
 	}
 
 	if err != nil {
@@ -367,6 +359,37 @@ func gitStatus(wt *git.Worktree) (git.Status, error) {
 		}
 	}
 	return stat, err
+}
+
+//run the command "git diff --cached --name-status --diff-filter=ACM" to get all the staged files that have 
+//been modified, added or copied.
+func getStagedChanges(wt *git.Worktree) ([]string, error){
+	var stagedFiles []string
+
+	c := exec.Command("git", "diff", "--cached", "--name-status", "--diff-filter=ACM")
+	c.Dir = wt.Filesystem.Root()
+	output, err := c.CombinedOutput()
+
+	if err != nil {
+		log.Fatal("Execution of git command failed\n")
+	}
+	
+	//list staged files in format "Status \t Filename" e.g "A	new-file"
+	stagedFilesAndStatus := strings.Split(string(output), "\n")
+	fmt.Printf("files %v\n", stagedFilesAndStatus)
+
+	for _, fileString := range stagedFilesAndStatus {
+		if len(fileString) != 0 {
+
+			//extract file name only and add to array
+			fileStatusAndName := strings.Split(fileString, "\t")
+			if len(fileStatusAndName) > 0 {
+				file := fileStatusAndName[1]
+				stagedFiles = append(stagedFiles, file)
+			}
+		}
+	}
+	return stagedFiles, err
 }
 
 // scan accepts a Patch, Commit, and repo. If the patches contains files that are
