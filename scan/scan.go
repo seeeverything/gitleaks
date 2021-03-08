@@ -280,16 +280,13 @@ func (repo *Repo) scanUncommitted() error {
 			currFileContents string
 			filename         string
 		)
-		
-		workTreeBuf := bytes.NewBuffer(nil)
+
 		workTreeFile, err := wt.Filesystem.Open(fn)
 		if err != nil {
 			continue
 		}
-		if _, err := io.Copy(workTreeBuf, workTreeFile); err != nil {
-			return err
-		}
-		currFileContents = workTreeBuf.String()
+
+		currFileContents, _ = getStagedFile(wt, fn)
 		filename = workTreeFile.Name()
 
 		// get files at HEAD state
@@ -361,7 +358,7 @@ func gitStatus(wt *git.Worktree) (git.Status, error) {
 	return stat, err
 }
 
-//run the command "git diff --cached --name-status --diff-filter=ACM" to get all the staged files that have 
+//run the command "git diff --cached --name-status --diff-filter=ACM" to get all the staged files that have
 //been modified, added or copied.
 func getStagedChanges(wt *git.Worktree) ([]string, error){
 	var stagedFiles []string
@@ -373,7 +370,7 @@ func getStagedChanges(wt *git.Worktree) ([]string, error){
 	if err != nil {
 		log.Fatal("Execution of git command failed\n")
 	}
-	
+
 	//list staged files in format "Status \t Filename" e.g "A	new-file"
 	stagedFilesAndStatus := strings.Split(string(output), "\n")
 
@@ -389,6 +386,16 @@ func getStagedChanges(wt *git.Worktree) ([]string, error){
 		}
 	}
 	return stagedFiles, err
+}
+
+//Get the contents of the staged version of the file, incase file has been further modified
+func getStagedFile(wt *git.Worktree, file string)(string, error){
+
+	c := exec.Command("git", "show", ":0:" + file)
+	c.Dir = wt.Filesystem.Root()
+	output, err := c.CombinedOutput()
+
+	return string(output) , err
 }
 
 // scan accepts a Patch, Commit, and repo. If the patches contains files that are
