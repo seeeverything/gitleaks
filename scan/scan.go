@@ -286,7 +286,7 @@ func (repo *Repo) scanUncommitted() error {
 			continue
 		}
 
-		currFileContents, _ = getStagedFile(wt, fn)
+		currFileContents, _ = getStagedFileContent(wt, fn)
 		filename = workTreeFile.Name()
 
 		// get files at HEAD state
@@ -389,7 +389,7 @@ func getStagedChanges(wt *git.Worktree) ([]string, error){
 }
 
 //Get the contents of the staged version of the file, incase file has been further modified
-func getStagedFile(wt *git.Worktree, file string)(string, error){
+func getStagedFileContent(wt *git.Worktree, file string)(string, error){
 
 	c := exec.Command("git", "show", ":0:" + file)
 	c.Dir = wt.Filesystem.Root()
